@@ -38,7 +38,7 @@ class DirectionalLight {
         let right = 100;
         let bottom = -100;
         let top = 100;
-        let near = 0;
+        let near = 1;
         let far = 500;
         mat4.ortho(projectionMatrix, left, right, bottom, top, near, far)
 

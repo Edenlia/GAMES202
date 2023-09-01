@@ -19,6 +19,8 @@ varying highp vec4 vPosWorld;
 #define INV_PI 0.31830988618
 #define INV_TWO_PI 0.15915494309
 
+#define RAY_MARCH_STEPS 1000
+
 float Rand1(inout float p) {
   p = fract(p * .1031);
   p *= p + 33.33;
@@ -122,8 +124,13 @@ vec3 GetGBufferDiffuse(vec2 uv) {
  *
  */
 vec3 EvalDiffuse(vec3 wi, vec3 wo, vec2 uv) {
-  vec3 L = vec3(0.0);
-  return L;
+  vec3 normal = GetGBufferNormalWorld(uv);
+  if (dot(wi, normal) < 0.0 || dot(wo, normal) < 0.0) {
+    return vec3(0.0);
+  }
+  else {
+    return GetGBufferDiffuse(uv) * INV_PI * dot(wi, normal);
+  }
 }
 
 /*
@@ -133,10 +140,27 @@ vec3 EvalDiffuse(vec3 wi, vec3 wo, vec2 uv) {
  */
 vec3 EvalDirectionalLight(vec2 uv) {
   vec3 Le = vec3(0.0);
+
+  float visible = GetGBufferuShadow(uv);
+  Le = uLightRadiance * visible;
+
   return Le;
 }
 
 bool RayMarch(vec3 ori, vec3 dir, out vec3 hitPos) {
+  float step = 1.0;
+  float bias = 0.00001;
+  for (int i = 1; i <= RAY_MARCH_STEPS; i++) {
+    vec3 posWorld = ori + dir * step * float(i);
+    float rayDepth = GetDepth(posWorld);
+    float depth = GetGBufferDepth(GetScreenCoordinate(posWorld));
+
+    if (rayDepth - depth > bias) {
+      hitPos = posWorld;
+      return true;
+    }
+  }
+
   return false;
 }
 
@@ -147,6 +171,30 @@ void main() {
 
   vec3 L = vec3(0.0);
   L = GetGBufferDiffuse(GetScreenCoordinate(vPosWorld.xyz));
-  vec3 color = pow(clamp(L, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.2));
+  vec3 wo = uCameraPos - vPosWorld.xyz;
+  wo = normalize(wo);
+  vec3 wi = uLightDir;
+  wi = normalize(wi);
+
+  vec3 directColor = EvalDiffuse(wi, wo, GetScreenCoordinate(vPosWorld.xyz))
+  * EvalDirectionalLight(GetScreenCoordinate(vPosWorld.xyz));
+  vec3 indirectColor = vec3(0.0);
+  for (int i = 0; i < SAMPLE_NUM; i++) {
+    float pdf = 0.0;
+    vec3 wo = SampleHemisphereCos(s, pdf);
+    wo = normalize(wo);
+    vec3 wi = uLightDir;
+    wi = normalize(wi);
+    vec3 hitPos = vec3(0.0);
+    if (RayMarch(vPosWorld.xyz, wi, hitPos)) {
+      vec3 normal = GetGBufferNormalWorld(GetScreenCoordinate(hitPos));
+      indirectColor += EvalDiffuse(wi, wo, GetScreenCoordinate(hitPos))
+      * EvalDirectionalLight(GetScreenCoordinate(hitPos))
+      * pdf;
+    }
+  }
+
+  vec3 color = directColor + indirectColor;
+
   gl_FragColor = vec4(vec3(color.rgb), 1.0);
 }
