@@ -58,6 +58,7 @@ float DistributionGGX(Vec3f N, Vec3f H, float roughness)
 
 float GeometrySchlickGGX(float NdotV, float roughness) {
     float a = roughness;
+//    float k = ((a + 1) * (a + 1)) / 8.0f;
     float k = (a * a) / 2.0f;
 
     float nom = NdotV;
@@ -73,17 +74,39 @@ float GeometrySmith(float roughness, float NoV, float NoL) {
     return ggx1 * ggx2;
 }
 
+float Fresnel(float NoV, float f0){
+    float r0 = f0 * f0;
+
+    return r0 + (1.0f - r0) * pow(1.0f - NoV, 5.0f);
+}
+
+
 Vec3f IntegrateBRDF(Vec3f V, float roughness, float NdotV) {
     float A = 0.0;
     float B = 0.0;
     float C = 0.0;
     const int sample_count = 1024;
     Vec3f N = Vec3f(0.0, 0.0, 1.0);
+//    float mu = 1 - sqrt(NdotV); // sinNV
     
     samplePoints sampleList = squareToCosineHemisphere(sample_count);
     for (int i = 0; i < sample_count; i++) {
-      // TODO: To calculate (fr * ni) / p_o here
-      
+      // To calculate (fr * ni) / p_o here
+        Vec3f L = sampleList.directions[i];
+        float pdf = sampleList.PDFs[i];
+        Vec3f H = normalize(V + L);
+        float NdotL = std::max(0.f, dot(L, N));
+        float D = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(roughness, NdotV, NdotL);
+        float refractiveIndex1 = 1.0; // air
+        float refractiveIndex2 = 5.; // custom material
+//        float F = Fresnel(NdotV, 0.05);
+        float F = 1;
+        float BRDF = F * G * D / (4 * NdotL * NdotV);
+        A += BRDF * NdotL / pdf;
+        B += BRDF * NdotL / pdf;
+        C += BRDF * NdotL / pdf;
+
     }
 
     return {A / sample_count, B / sample_count, C / sample_count};

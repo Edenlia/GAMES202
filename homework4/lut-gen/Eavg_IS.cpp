@@ -29,9 +29,25 @@ Vec3f ImportanceSampleGGX(Vec2f Xi, Vec3f N, float roughness) {
 
     float a = roughness * roughness;
 
-    // TODO: Copy the code from your previous work - Bonus 1
+    //in spherical space, phi and theta obey GGX distribution
+    float phi = 2 * PI * Xi.y;
+    float theta = std::atan((a * sqrt(Xi.x))/ sqrt(1 - Xi.x));
 
-    return Vec3f(1.0f);
+    //from spherical space to cartesian space
+    Vec3f M = Vec3f (sin(theta) * cos(phi), sin(theta) * sin(phi), cos(theta));
+
+    //tangent coordinates
+    Vec3f up = abs(N.z) < 0.999 ? Vec3f(0.0f, 0.0f, 1.0f) : Vec3f(1.0f, 0.0f, 0.0f);
+    Vec3f T = normalize(cross(up, N));
+    Vec3f B = normalize(cross(N, T));
+
+    //transform H to tangent space
+    Vec3f M_tangent;
+    M_tangent.x = dot(M, T);
+    M_tangent.y = dot(M, B);
+    M_tangent.z = dot(M, N);
+
+    return M_tangent;
 }
 
 
@@ -51,11 +67,11 @@ Vec3f IntegrateEmu(Vec3f V, float roughness, float NdotV, Vec3f Ei) {
         float VoH = std::max(dot(V, H), 0.0f);
         float NoV = std::max(dot(N, V), 0.0f);
 
-        // TODO: To calculate Eavg here - Bonus 1
-        
+        // To calculate Eavg here
+        Eavg += Ei * NoL * 2;
     }
 
-    return Vec3f(1.0);
+    return Eavg / sample_count;
 }
 
 void setRGB(int x, int y, float alpha, unsigned char *data) {
